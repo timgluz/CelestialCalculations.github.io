@@ -6,9 +6,8 @@ use std::cell::Cell;
 #[derive(Debug, Copy, Clone)]
 enum Action {
     ClearText,
-    EntryActivated(Entity),
-    EntryChanged(Entity),
-    ValueChanged(Entity),
+    Convert,
+    InputChanged(entity),
 }
 
 #[derive(Default)]
@@ -30,10 +29,15 @@ impl State for MainViewState {
                     ctx.widget().set("text_input", String16::from(""));
                     ctx.widget().set("text_result", String16::from(""));
                 }
-                Action::EntryChanged(entity) => {
-                    let widget = ctx.get_widget(entity);
-                    let text = widget.get::<String16>("text");
-                    println!("entry changed: {}", text);
+                Action::Convert => {
+                    let input = *ctx.widget().get::<f64>("input");
+                    let result_txt = format!("{:.9}", input);
+                    ctx.widget().set("text_result", String16::from(result_txt));
+                }
+                Action::InputChanged(entity) => {
+                    let value = *ctx.get_widget(entity).get::<f64>("text");
+                    *ctx.widget().get_mut::<f64>("input") = value;
+                    println!("entry changed: {}", value);
                 }
                 _ => {
                     println!("unsupported action");
@@ -54,6 +58,7 @@ fn create_header(ctx: &mut BuildContext, text: &str) -> Entity {
 
 widget!(
     MainView<MainViewState> {
+        input: f64,
         text_input: String16,
         text_result: String16
     }
@@ -61,9 +66,12 @@ widget!(
 
 impl Template for MainView {
     fn template(self, id: Entity, ctx: &mut BuildContext) -> Self {
-        let state = self.clone_state();
+        let clear_state = self.clone_state();
+        let convert_state = self.clone_state();
+        let change_state = self.clone_state();
 
         self.name("Chapter.2 - Unit conversion")
+            .input(0.0)
             .text_input("0.0")
             .text_result("Result: 0")
             .child(
@@ -78,13 +86,16 @@ impl Template for MainView {
                                 TextBox::create()
                                     .water_mark("From value")
                                     .text(("text_input", id))
+                                    .on_changed(move |_, entity| {
+                                        change_state.action(Action::InputChanged(entity));
+                                    })
                                     .build(ctx),
                             )
                             .child(
                                 Button::create()
                                     .text("Clear")
                                     .on_click(move |_| {
-                                        state.action(Action::ClearText);
+                                        clear_state.action(Action::ClearText);
                                         true
                                     })
                                     .build(ctx),
@@ -95,6 +106,21 @@ impl Template for MainView {
                         Stack::create()
                             .attach(Grid::column(1))
                             .child(create_header(ctx, "To unit"))
+                            .child(
+                                TextBox::create()
+                                    .water_mark("Result")
+                                    .text(("text_result", id))
+                                    .build(ctx),
+                            )
+                            .child(
+                                Button::create()
+                                    .text("Convert")
+                                    .on_click(move |_| {
+                                        convert_state.action(Action::Convert);
+                                        true
+                                    })
+                                    .build(ctx),
+                            )
                             .build(ctx),
                     )
                     .build(ctx),
